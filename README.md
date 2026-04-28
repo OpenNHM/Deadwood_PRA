@@ -1,2 +1,2 @@
 # Deadwood_PRA
-This script computes avalanche release membership and assesses the protective effect of lying deadwood dominated forest areas against snow avalanche release.
+This script computes avalanche release membership and assesses the protective effect of lying deadwood dominated forest areas against snow avalanche release. It is designed for disturbed mountain forests where lying deadwood strongly influences surface roughness and therefore the likelihood of avalanche release. The workflow combines terrain information, deadwood structure, and canopy coverage to derive spatially explicit fuzzy membership maps.
