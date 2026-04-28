@@ -1,5 +1,7 @@
 # Title: Assessing the Protective Effect of Lying Deadwood Against Snow Avalanches
 #
+#Please set input parameters to work
+#
 # Description:
 # This script computes avalanche release membership and assesses the protective
 # effect of lying deadwood dominated forest areas against snow avalanche release.
