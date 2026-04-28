@@ -16,11 +16,9 @@
 #
 # Notes:
 # - Developed for high-resolution UAV and ULS deadwood structure analysis.
+# - Code was sucessfully tested across 5 study sites including windthrow and snagfall dominated areas
+# - Code was tested using different dense point clouds derived from low-cost DJI UAV systems to advanced DJI ULS Zenmuse L2 systems
 # - The workflow integrates terrain, deadwood structure, canopy cover, and surface roughness.
-# - lidR version 4.0.2 is recommended.
-# - This version uses terra for raster processing.
-# - The main outputs are snow-depth dependent roughness layers, fuzzy membership
-#   maps, and intermediate raster products describing canopy and deadwood effects.
 #
 # Disclaimer:
 # THE SCRIPT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
