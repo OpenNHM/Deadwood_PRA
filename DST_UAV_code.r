@@ -17,7 +17,7 @@
 # Notes:
 # - Developed for high-resolution UAV and ULS deadwood structure analysis.
 # - Code was sucessfully tested across 5 study sites including windthrow and snagfall dominated areas
-# - Code was tested using different dense point clouds derived from low-cost DJI UAV systems to advanced DJI ULS Zenmuse L2 systems
+# - Code was tested using different dense point clouds derived from low-cost DJI UAV systems to advanced ULS (DJI Zenmuse L2) systems
 # - The workflow integrates terrain, deadwood structure, canopy cover, and surface roughness.
 #
 # Disclaimer:
