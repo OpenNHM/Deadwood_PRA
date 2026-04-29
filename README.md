@@ -1,6 +1,8 @@
 # Deadwood_PRA: Decision support tool for assessing the protective effect of lying deadwood against snow avalanche release
 This script computes avalanche release membership and assesses the protective effect of lying deadwood dominated forest areas against snow avalanche release. It is designed for disturbed mountain forests where lying deadwood strongly influences surface roughness and therefore the likelihood of avalanche release. The workflow combines terrain information, deadwood structure, and canopy coverage to derive spatially explicit fuzzy membership maps.
 
+The code requires only a dense point cloud (ideally derived from UAV photogrammetry or ULS) and a reference DTM.
+
 For testing the code, we provide following datasets:
 
 - Test raw data (point clouds): [Zenodo Dataset](https://doi.org/10.5281/zenodo.19485391)  
