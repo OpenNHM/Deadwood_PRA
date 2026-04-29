@@ -3,6 +3,8 @@ This script computes avalanche release membership and assesses the protective ef
 
 The code requires only a dense point cloud (ideally derived from UAV photogrammetry or ULS) and a reference DTM.
 
+To run the code, the paths to the input and results folders must be adjusted.
+
 For testing the code, we provide following datasets:
 
 - Test raw data (point clouds): [Zenodo Dataset](https://doi.org/10.5281/zenodo.19485391)  
