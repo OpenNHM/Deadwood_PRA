@@ -12,6 +12,9 @@ Users are referred to the official regional data provider.
 For the study area Kals am Großglockner, the data can be downloaded here:  
 [TIRIS data portal](https://www.tirol.gv.at/sicherheit/geoinformation/geodaten-tiris/laserscandaten/)
 
+For details, we refer to the corresponding publication:
+Bührle, L. J., Baggio, T., Winiwarter, L., Adams, M., Lingua, E., Richter, P., Schulte, F., Holstein, K., Bebi, P., Marke, T., & Teich, M. (in prep.). A spatially explicit UAV-based decision support tool to assess the protective effect of lying deadwood on snow avalanche release.
+
 Shield: [![CC BY 4.0][cc-by-shield]][cc-by]
 
 This work is licensed under a
