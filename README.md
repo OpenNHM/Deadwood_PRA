@@ -6,7 +6,7 @@ The code requires only a dense point cloud (ideally derived from UAV photogramme
 For testing the code, we provide following datasets:
 
 - Test raw data (point clouds): [Zenodo Dataset](https://doi.org/10.5281/zenodo.19485391)  
-- Results (default settings): [Zenodo Results](https://doi.org/10.5281/zenodo.19734443)
+- Results (calculated with default settings): [Zenodo Results](https://doi.org/10.5281/zenodo.19734443)
 
 Due to data restrictions we cannot provide the required reference DTM.  
 Users are referred to the official regional data provider.
