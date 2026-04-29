@@ -13,7 +13,7 @@ For testing the code, we provide following datasets:
 Due to data restrictions we cannot provide the required reference DTM.  
 Users are referred to the official regional data provider.
 
-For the study area Kals am Großglockner, the data can be downloaded here:  
+For the study area Kals am Großglockner, the reference_DTM can be downloaded here:  
 [TIRIS data portal](https://www.tirol.gv.at/sicherheit/geoinformation/geodaten-tiris/laserscandaten/)
 
 For details, we refer to the corresponding publication:
