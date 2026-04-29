@@ -1,23 +1,23 @@
 # Title: Assessing the Protective Effect of Lying Deadwood Against Snow Avalanches
 #
-#Please set input parameters to work
+# Please set input parameters for the script to work
 #
 # Description:
 # This script computes avalanche release membership and assesses the protective
 # effect of lying deadwood dominated forest areas against snow avalanche release.
-# It is designed for disturbed mountain forests where lying deadwood strongly
+# It is designed for disturbed mountain forests, where lying deadwood strongly
 # influences surface roughness and therefore the likelihood of avalanche
 # release. The workflow combines terrain information, deadwood
 # structure, and canopy coverage to derive spatially explicit fuzzy membership maps.
 #
 # Authors: Leon Buehrle, Tommaso Baggio
-# Contact: leon.buehrle@t-online.de; tbaggio93@gmail.com
+# Contacts: leon.buehrle@t-online.de; tbaggio93@gmail.com
 # Year: 2026
 #
 # Notes:
-# - Developed for high-resolution UAV and ULS deadwood structure analysis.
-# - Code was sucessfully tested across 5 study sites including windthrow and snagfall dominated areas
-# - Code was tested using different dense point clouds derived from low-cost DJI UAV systems to advanced ULS (DJI Zenmuse L2) systems
+# - Developed for deadwood structure analysis, based on high-resolution UAV SfM/MVS and ULS pointclouds
+# - Code was sucessfully tested across five study sites, including windthrow and snagfall dominated areas
+# - Code was tested using different pointclouds derived from both low-cost UAV-photogrammetry and advanced ULS systems
 # - The workflow integrates terrain, deadwood structure, canopy cover, and surface roughness.
 #
 # Disclaimer:
@@ -32,10 +32,10 @@
 # Load required libraries
 # ==================================================================================================
 
-# LiDAR processing (ideally requires version 4.0.2)
+# LiDAR processing (requires version 4.0.2)
 library(lidR) # if higher version is used, do not change threshold_removevegetation > 3.9 (bug)
 
-# Modern raster operations
+# Raster operations
 library(terra)
 
 # Spatial vector data handling
@@ -73,7 +73,6 @@ library(igraph)
 project_path <- "path/to/your/project"
 setwd(project_path)
 
-# Define output directory
 # Define output directory (results will be stored here)
 results_path <- file.path(project_path, "results")
 
@@ -106,20 +105,20 @@ for (folder in subfolders) {
 # Input data and parameter settings
 # ==================================================================================================
 
-# Load dense point cloud (X, Y, Z, R, G, B, n, r) and assign CRS
-# The input point cloud should represent the snow-free surface and should
+# Load dense pointcloud (X, Y, Z, R, G, B, n, r) and assign CRS.
+# The input pointcloud should represent the snow-free surface and should
 # contain RGB values if RGBVI filtering is intended to be used.
-#nr is only used for LiDAR data
+# nr is only used for LiDAR data
 # Load LiDAR point cloud (LAS/LAZ file)
 las_path <- file.path(project_path, "data", "pointcloud.laz")
 las <- readLAS(las_path, select = "xyzRGBnr")
 # Define CRS of point cloud (must match DTM)
 st_crs(las) <- "EPSG:XXXX" 
 
-# Load digital terrain model and assign CRS
-# The DTM should describe the terrain beneath vegetation and deadwood and must
-# match  coordinate reference system.
-# Load Digital Terrain Model (GeoTIFF)
+# Load Digital Terrain Model (DTM) and assign CRS
+# The DTM should describe the terrain beneath the vegetation and deadwood
+# and must match the chosen CRS.
+# Load DTM (GeoTIFF)
 dtm_path <- file.path(project_path, "data", "DTM.tif")
 DTM <- rast(dtm_path)
 # Define coordinate reference system (use EPSG code or proj string)
@@ -134,14 +133,14 @@ res_fin <- 0.2            # (default: 0.2)
 res_redistribution <- 20  # (default: 20)
 
 # Apply RGBVI-based vegetation filtering.
-# TRUE  = additional spectral filtering after CSF classification
+# TRUE  = additional spectral filtering after Cloth Surface Filter (CSF) classification
 # FALSE = only CSF-based filtering is used
 use_rgbvi_filter <- TRUE  # (default: TRUE)
 
 # Threshold for RGBVI filtering.
 # Adjust depending on sensor characteristics and illumination conditions.
 # More negative values keep more points, while less negative or higher values
-# remove a larger proportion of vegetation-like points.
+# Remove a larger proportion of vegetation-like points.
 rgbvi_threshold <- -0.015  # (default: -0.015)
 
 # Height threshold used in CSF-based vegetation removal
@@ -154,14 +153,14 @@ upfilling_quantile_step <- 0.003   # (default: 0.003)
 upfilling_quantile_start <- 0.4    # (default: 0.4)
 upfilling_quantile_end <- 1        # (default: 1)
 
-# Snow-depth settings for roughness and fuzzy logic computation
+# Snow-depth settings for roughness and fuzzy logic computation.
 # These parameters define the modeled snow depth range used to evaluate how the
 # roughness effect of lying deadwood decreases as snow cover increases.
 upfilling_SVH_start <- 0.0  # (default: 0.0)
 upfilling_SVH_end <- 4      # (default: 4)
 upfilling_SVH_step <- 0.1   # (default: 0.1)
 
-# Tree detection and crown delineation parameters
+# Tree detection and crown delineation parameters.
 # These parameters affect tree-top detection and crown delineation and therefore
 # indirectly influence canopy-related membership estimates.
 hmin_tree <- 5                    # (default: 5)
@@ -181,21 +180,21 @@ num_cores <- 60  # (default: 60) cores (consider ~5 GB RAM per CPU)
 # Inspect input point cloud
 print(las)
 
-# Create digital surface model (DSM)
+# Create Digital Surface Model (DSM)
 DSM <- rast(grid_metrics(las, res = res_fin, ~mean(Z)))
 
-# Resample terrain model to the DSM grid
+# Resample DTM to the DSM grid
 DTM_res <- resample(DTM, DSM, method = "bilinear")
 
-# Normalize point cloud using terrain elevation
+# Normalize pointcloud using terrain elevation
 
 las_normalize <- normalize_height(las, DTM_res)
 
-# Generate vegetation height model (VHM) including crowns
+# Generate Vegetation Height Model (VHM) including crowns
 VHM_las <- rast(grid_metrics(las_normalize, res = res_fin, ~quantile(Z, 0.995)))
 
-# Fill gaps in the VHM using median filters
-# Median filtering reduces small gaps and noise in the canopy surface and helps
+# Fill gaps in the VHM using median filter
+# Median filter reduces small gaps and noise in the canopy surface and helps
 # produce more stable crown delineation results.
 VHM_filled <- focal(VHM_las, w = matrix(1, 3, 3), fun = median, na.rm = TRUE, fillvalue = NA)
 VHM_crowns_filled <- cover(
@@ -215,7 +214,7 @@ gc()
 # trees, the lmf window size may need adjustment to avoid over- or under-detection.
 ttops <- find_trees(VHM_crowns_filled, lmf(5, hmin = hmin_tree, shape = "circular"))
 
-# Delineate crowns using the Silva et al. (2016) approach
+# Delineate crowns using the Silva et al. (2016) approach.
 # This crown segmentation step is used to derive canopy structure and to later
 # estimate canopy coverage above deadwood-dominated surfaces.
 crowns <- silva2016(
@@ -258,7 +257,7 @@ st_geometry_type(tree_sf_single)
 tree_sf_single <- tree_sf_single %>%
   mutate(crown_id = NA_integer_)
 
-ayers <- unique(tree_sf_single$focal_median)
+layers <- unique(tree_sf_single$focal_median)
 
 for (l in layers) {
   sub <- tree_sf_single %>% filter(focal_median == l)
@@ -308,7 +307,7 @@ crown_raster <- rasterize(vect(crown_merged), VHM_crowns_filled, field = 1)
 # Deadwood classification and vegetation filtering
 # ==================================================================================================
 
-# Classify deadwood points using the Cloth Simulation Filter (CSF)
+# Classify deadwood points using the CSF
 # CSF is used here to remove elevated vegetation and retain a point set that
 # better represents terrain and lying deadwood surfaces.
 las_lastreturn <- classify_ground(
@@ -328,8 +327,8 @@ las_lastreturn <- classify_ground(
 las_no_trees_CSF_canopy <- filter_poi(las_lastreturn, Classification == 2)
 remove(las)
 
-# Normalize filtered point cloud
-# Converts absolute elevation (Z) into height above deadwood using the terrain model.
+# Normalize filtered pointcloud
+# Converts absolute elevation (Z) into height above deadwood using the DTM.
 las_no_trees_CSF_canopy <- normalize_height(las_no_trees_CSF_canopy, DTM_res)
 
 # Optional RGBVI-based vegetation filtering
@@ -383,7 +382,7 @@ las_fixed@data$B <- las_filtered@data$B
 # Terrain and deadwood surface models
 # ==================================================================================================
 
-# Create a surface model with trees removed
+# Create a DSM with trees removed
 #Use of 80th percentile
 DSM_no_trees <- rast(grid_metrics(las_fixed, res = res_fin, ~quantile(Z, 0.8)))
 DTM_res_clipped <- crop(DTM_res, DSM_no_trees)
@@ -392,7 +391,7 @@ DSM_no_trees_filled <- cover(DSM_no_trees, DTM_res_clipped)
 # Remove intermediate point cloud to free memory
 remove(las_no_trees_CSF_canopy)
 
-# Compute vegetation height model relative to terrain
+# Compute VHM relative to terrain
 VHM <- DSM_no_trees_filled - DTM_res
 VHM <- VHM * (VHM > -1)
 
@@ -467,7 +466,7 @@ zones_redistribution_renumbered <- ifel(
 # ==================================================================================================
 
 # Create 5 m analysis grid
-# This grid is used for fuzzy membership aggregation and for storing most final
+# This grid is used for fuzzy membership aggregation and for storing final
 # membership outputs at a practitioner-friendly spatial resolution.
 zones_5m <- rast(
   ext(zones_redistribution_renumbered),
@@ -494,7 +493,7 @@ zones_10m <- mask(zones_10m, zones_mask_10m)
 gc()
 
 # ==================================================================================================
-# Parallel computation of zone-based SVH metrics
+# Parallel computation of zone-based Stored Volume Height (SVH) metrics
 # ==================================================================================================
 
 # Define number of cores and register cluster
@@ -521,7 +520,7 @@ if (!file.exists(file.path(results_path, "zones/zones_redistribution.tif"))) {
 
 # Compute SVH metrics across quantiles and redistribution zones in parallel
 # For each redistribution zone, representative deadwood height is estimated from
-# quantiles and translated into stored volume height metrics under varying snow
+# quantiles and translated into SVH metrics under varying snow
 # filling assumptions.
 results_SVH <- foreach(
   quantile_deadwood_height = seq(upfilling_quantile_start, upfilling_quantile_end, by = upfilling_quantile_step),
@@ -534,13 +533,13 @@ results_SVH <- foreach(
   deadwood_VHM <- rast(file.path(results_path, "VHM/deadwood_VHM.tif"))
   zones_redistribution_renumbered <- rast(file.path(results_path, "zones/zones_redistribution.tif"))
   
-  #Function: Snow accumulation on protruding deadwood elements
+  # Function: Snow accumulation on protruding deadwood elements
   snow_above_deadwood <- function(x) {
     k <- 0.916
     1 - exp(-k * x)
   }
   
-  # Function:Snow sliding below deadwood
+  # Function: Snow sliding below deadwood
   snow_below_deadwood <- function(x) {
     ifelse(
       x < 0.4,
@@ -614,7 +613,7 @@ results_SVH <- foreach(
   do.call(rbind, df_results_local)
 }
 
-# Combine all SVH results in a single data frame
+# Combine all SVH results into a single data frame
 df_results_SVH_zone_quantile <- do.call(rbind, results_SVH)
 
 # Stop cluster and free memory
@@ -627,7 +626,7 @@ gc()
 # Membership functions
 # ==================================================================================================
 
-# Generalized bell-shaped membership for roughness of the bed surface
+# Generalized, bell-shaped membership for roughness of the bed surface
 # This function transforms roughness values into fuzzy membership values, where
 # higher membership indicates conditions more favorable for avalanche release.
 bell_membership_roughness_bed_surface <- function(x, a = 0.01, b = 2, c = -0.005) {
@@ -655,7 +654,7 @@ dtm_resampled_5m <- resample(DTM, zones_5m, method = "bilinear")
 DTM_5m_slope <- terrain(dtm_resampled_5m, v = "slope", unit = "degrees")
 slope_membership <- bell_membership_slope(DTM_5m_slope, a = 7, b = 4, c = 43)
 
-# Save slope membership if it does not yet exist
+# Save slope membership, if it does not yet exist
 if (!file.exists(file.path(results_path, "slope_membership/slope_ALS2015_5m_membership.tif"))) {
   writeRaster(slope_membership, file.path(results_path, "slope_membership/slope_ALS2015_5m_membership.tif"), overwrite = TRUE)
 }
@@ -672,7 +671,7 @@ res(r_template) <- 0.2
 VHM_beforettop_extended <- extend(VHM, zones_10m)
 crown_height_above_deadwood <- VHM_crowns_filled_crop - VHM_beforettop_extended
 
-# Classify canopy cover presence above 4 m (2 times expected 30y-snow depth)
+# Classify canopy cover presence above 4 m (twice the expected 30y-snow depth)
 crown_height_binary <- ifel(crown_height_above_deadwood < 4, 0, 1)
 crown_height_binary <- extend(crown_height_binary, zones_10m)
 zones_10m_02res <- resample(zones_10m, crown_height_binary, method = "near")
@@ -792,7 +791,7 @@ results_fuzzy_approach <- foreach(
     VHM_withttop_crop <- crop(VHM_withttop, zone_buffer)
     
     
-    # Combine the local VHM with the zone-specific snow cover.
+    # Combine the local VHM with the zone-specific snow cover
     # This simulates a snow surface that fills depressions up to the
     # simulated snow height within each redistribution zone.
     VHM_onlyttop_filled <- app(c(VHM_max, VHM_onlyttop_crop), fun = max, na.rm = TRUE)
@@ -800,7 +799,7 @@ results_fuzzy_approach <- foreach(
     VHM_filled_withttop <- app(c(VHM_max, VHM_withttop_crop), fun = max, na.rm = TRUE)
     
     
-    # Calculate still outstanding deadwood or stems height
+    # Calculate missing deadwood or stem height
     # roughness-relevant residual structure.
     VHM_onlyttop_filled <- VHM_onlyttop_filled - VHM_max
     VHM_filled_beforettop <- VHM_filled_beforettop - VHM_max
@@ -814,7 +813,7 @@ results_fuzzy_approach <- foreach(
     VHM_filled_resampled_beforettop <- crop(VHM_filled_resampled_beforettop, zone_buffer)
     
     # Compute roughness for winter terrain without standing trees and only for standing trees (different window size) 
-	#as spatial roughness effect is smaller of standing trees
+	# as spatial roughness effect is smaller of standing trees
     roughness_onlyttop <- vrm(VHM_onlyttops_filled_resampled, 3)
     roughness_beforettop <- vrm(VHM_filled_resampled_beforettop, 7)
     
@@ -841,7 +840,7 @@ results_fuzzy_approach <- foreach(
   
   zones_05m <- resample(zones_5m, roughness_mosaic, method = "near")
   
-  # Aggregate roughness membership by zone using different quantiles (5,10,20)
+  # Aggregate roughness membership by zone using different quantiles (5, 10, 20)
   zone_q5 <- zonal(
     roughness_mosaic_membership,
     zones_05m,
@@ -886,7 +885,7 @@ results_fuzzy_approach <- foreach(
     })
     mu_aggregated
   }
-  #calculate PRA for different aggregation percentiles (5,10,20)
+  # Calculate PRA for different aggregation percentiles (5, 10, 20)
   fuzzy_logic_result_q5roughness <- mu_PRA(roughness_aggregated_q5, slope_membership, membership_canopycoverage)
   fuzzy_logic_result_q10roughness <- mu_PRA(roughness_aggregated_q10, slope_membership, membership_canopycoverage)
   fuzzy_logic_result_q20roughness <- mu_PRA(roughness_aggregated_q20, slope_membership, membership_canopycoverage)
@@ -923,9 +922,9 @@ rm(cl)
 gc()
 
 # Save final outputs
-# Please adapt file names if a clearer distinction between parameter settings is required.
-# These final products include the deadwood-related surface model, crown raster
-# outputs, and additional structural rasters needed for interpretation.
+# Please adapt file names, if a clearer distinction between parameter settings is required.
+# These final products include the deadwood-related DSM, crown raster
+# outputs, and additional structural rasters, needed for interpretation.
 writeRaster(DSM_no_trees, file.path(results_path, "VHM", "DSM_notrees.tif"), overwrite = TRUE)
 writeRaster(crowns, file.path(results_path, "adapted_tree_parameters", "crowns.tif"), overwrite = TRUE)
 
