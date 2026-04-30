@@ -150,7 +150,7 @@ threshold_removevegetation <- 3.5  # (default: 3.5) # if lidr version >4.0.2 is 
 # These parameters define the range and increment of quantiles used to estimate
 # representative deadwood height within redistribution zones.
 upfilling_quantile_step <- 0.003   # (default: 0.003)
-upfilling_quantile_start <- 0.4    # (default: 0.4)
+upfilling_quantile_start <- 0.2    # (default: 0.2)
 upfilling_quantile_end <- 1        # (default: 1)
 
 # Snow-depth settings for roughness and fuzzy logic computation.
@@ -228,7 +228,7 @@ crowns <- silva2016(
 crowns[VHM_crowns_filled <= crown_min_height] <- NA
 
 # Convert crowns to polygons and calculate crown area
-crown_polygons <- as.polygons(rast(crowns), dissolve = TRUE)
+crown_polygons <- as.polygons(crowns, dissolve = TRUE)
 crown_polygons$area <- expanse(crown_polygons)
 
 # Filter small crown polygons
