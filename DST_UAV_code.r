@@ -112,17 +112,24 @@ for (folder in subfolders) {
 # Load LiDAR point cloud (LAS/LAZ file)
 las_path <- file.path(project_path, "data", "pointcloud.laz")
 las <- readLAS(las_path, select = "xyzRGBnr")
-# Define CRS of point cloud (must match DTM)
-st_crs(las) <- "EPSG:XXXX" 
+
+# Define coordinate reference system (replace XXXX with the correct EPSG code, e.g. 31254 or 32632)
+# Example: CRS_EPSG <- "EPSG:32632"
+CRS_EPSG <- "EPSG:XXXX"
+
+# Assign CRS to LAS point cloud
+st_crs(las) <- CRS_EPSG
 
 # Load Digital Terrain Model (DTM) and assign CRS
 # The DTM should describe the terrain beneath the vegetation and deadwood
 # and must match the chosen CRS.
+
 # Load DTM (GeoTIFF)
 dtm_path <- file.path(project_path, "data", "DTM.tif")
 DTM <- rast(dtm_path)
-# Define coordinate reference system (use EPSG code or proj string)
-crs(DTM) <- "EPSG:XXXX"
+
+# Assign the same CRS to the DTM
+crs(DTM) <- CRS_EPSG
 
 # Spatial resolution settings
 # res_fin controls the base processing resolution for detailed raster products.
@@ -182,25 +189,31 @@ print(las)
 
 # Create Digital Surface Model (DSM)
 DSM <- rast(grid_metrics(las, res = res_fin, ~mean(Z)))
+crs(DSM) <- CRS_EPSG
 
 # Resample DTM to the DSM grid
 DTM_res <- resample(DTM, DSM, method = "bilinear")
+crs(DTM_res) <- CRS_EPSG
 
 # Normalize pointcloud using terrain elevation
-
 las_normalize <- normalize_height(las, DTM_res)
+st_crs(las_normalize) <- CRS_EPSG
 
 # Generate Vegetation Height Model (VHM) including crowns
 VHM_las <- rast(grid_metrics(las_normalize, res = res_fin, ~quantile(Z, 0.995)))
+crs(VHM_las) <- CRS_EPSG
 
 # Fill gaps in the VHM using median filter
 # Median filter reduces small gaps and noise in the canopy surface and helps
 # produce more stable crown delineation results.
 VHM_filled <- focal(VHM_las, w = matrix(1, 3, 3), fun = median, na.rm = TRUE, fillvalue = NA)
+crs(VHM_filled) <- CRS_EPSG
+
 VHM_crowns_filled <- cover(
   VHM_filled,
   focal(VHM_filled, w = matrix(1, 5, 5), fun = median, na.rm = TRUE, fillvalue = NA)
 )
+crs(VHM_crowns_filled) <- CRS_EPSG
 
 # Free memory
 gc()
@@ -213,6 +226,8 @@ gc()
 # Local maxima are interpreted as candidate tree tops. In stands with many tall
 # trees, the lmf window size may need adjustment to avoid over- or under-detection.
 ttops <- find_trees(VHM_crowns_filled, lmf(5, hmin = hmin_tree, shape = "circular"))
+ttops <- st_as_sf(ttops)
+st_crs(ttops) <- CRS_EPSG
 
 # Delineate crowns using the Silva et al. (2016) approach.
 # This crown segmentation step is used to derive canopy structure and to later
@@ -223,12 +238,15 @@ crowns <- silva2016(
   exclusion = crown_min_height_ratio,
   max_cr_factor = max_cr_factor
 )()
+crs(crowns) <- CRS_EPSG
 
 # Remove crown areas below the minimum crown height
 crowns[VHM_crowns_filled <= crown_min_height] <- NA
+crs(crowns) <- CRS_EPSG
 
 # Convert crowns to polygons and calculate crown area
 crown_polygons <- as.polygons(crowns, dissolve = TRUE)
+crs(crown_polygons) <- CRS_EPSG
 crown_polygons$area <- expanse(crown_polygons)
 
 # Filter small crown polygons
@@ -236,6 +254,7 @@ tree_crown_shape <- crown_polygons[crown_polygons$area > cmin_tree, ]
 
 # Convert crowns to sf and split multipart geometries
 tree_sf <- st_as_sf(tree_crown_shape)
+st_crs(tree_sf) <- CRS_EPSG
 
 split_polys <- lapply(seq_len(nrow(tree_sf)), function(i) {
   geom <- tree_sf[i, ]
@@ -243,9 +262,11 @@ split_polys <- lapply(seq_len(nrow(tree_sf)), function(i) {
 })
 
 tree_sf_single <- do.call(rbind, split_polys)
+st_crs(tree_sf_single) <- CRS_EPSG
 
 # Optional conversion back to terra
 tree_polygons <- vect(tree_sf_single)
+crs(tree_polygons) <- CRS_EPSG
 
 # Inspect output geometry types
 tree_sf_single
@@ -286,22 +307,26 @@ crown_merged <- tree_sf_single %>%
     geometry = st_union(geometry),
     .groups = "drop"
   )
-
+st_crs(crown_merged) <- CRS_EPSG
 
 # Recalculate crown area and remove very small crowns
 crown_merged <- crown_merged %>%
   mutate(area = st_area(geometry)) %>%
   mutate(area = as.numeric(area)) %>%
   filter(area >= 2)
+st_crs(crown_merged) <- CRS_EPSG
 
 # Keep only tree tops located inside crown polygons
 ttops <- st_as_sf(ttops)
+st_crs(ttops) <- CRS_EPSG
 ttops <- st_transform(ttops, st_crs(crown_merged))
 inside <- st_within(ttops, crown_merged, sparse = TRUE)
 ttops_filtered <- ttops[lengths(inside) > 0, ]
+st_crs(ttops_filtered) <- CRS_EPSG
 
 # Rasterize crown polygons
 crown_raster <- rasterize(vect(crown_merged), VHM_crowns_filled, field = 1)
+crs(crown_raster) <- CRS_EPSG
 
 # ==================================================================================================
 # Deadwood classification and vegetation filtering
@@ -322,14 +347,17 @@ las_lastreturn <- classify_ground(
   ),
   last_returns = TRUE
 )
+st_crs(las_lastreturn) <- CRS_EPSG
 
 # Retain points classified as deadwood/class 2
 las_no_trees_CSF_canopy <- filter_poi(las_lastreturn, Classification == 2)
+st_crs(las_no_trees_CSF_canopy) <- CRS_EPSG
 remove(las)
 
 # Normalize filtered pointcloud
 # Converts absolute elevation (Z) into height above deadwood using the DTM.
 las_no_trees_CSF_canopy <- normalize_height(las_no_trees_CSF_canopy, DTM_res)
+st_crs(las_no_trees_CSF_canopy) <- CRS_EPSG
 
 # Optional RGBVI-based vegetation filtering
 # RGBVI helps distinguish vegetation from deadwood using RGB values.
@@ -362,9 +390,11 @@ if (use_rgbvi_filter) {
       (Z > 0.05 & RGBVI <= rgbvi_threshold)
     )
   )
+  st_crs(las_filtered) <- CRS_EPSG
 } else {
   # Keep all CSF-classified points without additional RGBVI filtering
   las_filtered <- las_no_trees_CSF_canopy
+  st_crs(las_filtered) <- CRS_EPSG
 }
 
 # Rebuild LAS object with corrected elevation field
@@ -372,6 +402,7 @@ if (use_rgbvi_filter) {
 df <- las_filtered@data[, c("X", "Y", "Zref")]
 colnames(df)[3] <- "Z"
 las_fixed <- LAS(df, header = las_filtered@header)
+st_crs(las_fixed) <- CRS_EPSG
 
 # Restore RGB attributes
 las_fixed@data$R <- las_filtered@data$R
@@ -383,10 +414,15 @@ las_fixed@data$B <- las_filtered@data$B
 # ==================================================================================================
 
 # Create a DSM with trees removed
-#Use of 80th percentile
+# Use of 80th percentile
 DSM_no_trees <- rast(grid_metrics(las_fixed, res = res_fin, ~quantile(Z, 0.8)))
+crs(DSM_no_trees) <- CRS_EPSG
+
 DTM_res_clipped <- crop(DTM_res, DSM_no_trees)
+crs(DTM_res_clipped) <- CRS_EPSG
+
 DSM_no_trees_filled <- cover(DSM_no_trees, DTM_res_clipped)
+crs(DSM_no_trees_filled) <- CRS_EPSG
 
 # Remove intermediate point cloud to free memory
 remove(las_no_trees_CSF_canopy)
@@ -394,16 +430,26 @@ remove(las_no_trees_CSF_canopy)
 # Compute VHM relative to terrain
 VHM <- DSM_no_trees_filled - DTM_res
 VHM <- VHM * (VHM > -1)
+crs(VHM) <- CRS_EPSG
 
 # Rasterize filtered tree tops to represent stem of standing trees in roughness calculation
 ttops_vect <- vect(ttops_filtered)
+crs(ttops_vect) <- CRS_EPSG
+
 DSM_terra <- DSM_no_trees
+crs(DSM_terra) <- CRS_EPSG
+
 ttops_raster_buffer <- rasterize(ttops_vect, DSM_terra, field = "Z", fun = "max", background = NA)
+crs(ttops_raster_buffer) <- CRS_EPSG
 
 # Separate VHM representations with and without tree tops
 VHM_onlyttops <- VHM * 0
+crs(VHM_onlyttops) <- CRS_EPSG
 VHM_onlyttops <- cover(ttops_raster_buffer, VHM_onlyttops)
+crs(VHM_onlyttops) <- CRS_EPSG
+
 VHM_aftertreetop <- cover(ttops_raster_buffer, VHM)
+crs(VHM_aftertreetop) <- CRS_EPSG
 
 # ==================================================================================================
 # Snow redistribution zones
@@ -429,19 +475,25 @@ zones_redistribution <- rast(
   ncols = ncol_new, nrows = nrow_new,
   xmin = xmin_new, xmax = xmax_new,
   ymin = ymin_new, ymax = ymax_new,
-  crs = crs(VHM_crowns_filled)
+  crs = CRS_EPSG
 )
+crs(zones_redistribution) <- CRS_EPSG
 
 # Convert grid to polygons and assign zone IDs
 polygony_redistribution <- as.polygons(zones_redistribution)
+crs(polygony_redistribution) <- CRS_EPSG
 polygony_redistribution$zones <- seq_len(nrow(polygony_redistribution))
 
 # Rasterize zone IDs
 zones_redistribution <- rasterize(polygony_redistribution, zones_redistribution, field = "zones")
+crs(zones_redistribution) <- CRS_EPSG
 
 # Extend VHM to the redistribution grid
 VHM_crowns_filled_extended <- extend(VHM_crowns_filled, zones_redistribution)
+crs(VHM_crowns_filled_extended) <- CRS_EPSG
+
 zones_redistribution_02 <- resample(zones_redistribution, VHM_crowns_filled_extended, method = "near")
+crs(zones_redistribution_02) <- CRS_EPSG
 
 # Identify valid zones with sufficient data coverage
 # Zones with too little valid data are excluded to avoid unstable quantile and
@@ -451,7 +503,9 @@ valid_zones <- zone_cover$zones[zone_cover[, 2] >= 6000]
 
 # Keep only valid redistribution zones
 zones_redistribution_renumbered <- ifel(zones_redistribution_02 %in% valid_zones, zones_redistribution_02, NA)
+crs(zones_redistribution_renumbered) <- CRS_EPSG
 zones_redistribution_renumbered <- resample(zones_redistribution_renumbered, zones_redistribution, method = "near")
+crs(zones_redistribution_renumbered) <- CRS_EPSG
 zone_vals <- values(zones_redistribution_renumbered)
 
 # Mask invalid redistribution zones
@@ -460,6 +514,7 @@ zones_redistribution_renumbered <- ifel(
   zones_redistribution,
   NA
 )
+crs(zones_redistribution_renumbered) <- CRS_EPSG
 
 # ==================================================================================================
 # Aggregation grids for fuzzy logic and canopy coverage
@@ -471,11 +526,15 @@ zones_redistribution_renumbered <- ifel(
 zones_5m <- rast(
   ext(zones_redistribution_renumbered),
   resolution = res_fuzzy_logic,
-  crs = crs(zones_redistribution_renumbered)
+  crs = CRS_EPSG
 )
 values(zones_5m) <- 1:ncell(zones_5m)
+crs(zones_5m) <- CRS_EPSG
+
 zones_mask_5m <- resample(zones_redistribution_renumbered, zones_5m, method = "near")
+crs(zones_mask_5m) <- CRS_EPSG
 zones_5m <- mask(zones_5m, zones_mask_5m)
+crs(zones_5m) <- CRS_EPSG
 
 # Create 10 m grid for canopy coverage analysis
 # A coarser grid is used here because canopy coverage is treated as an aggregated
@@ -483,11 +542,15 @@ zones_5m <- mask(zones_5m, zones_mask_5m)
 zones_10m <- rast(
   ext(zones_redistribution_renumbered),
   resolution = 10,
-  crs = crs(zones_redistribution_renumbered)
+  crs = CRS_EPSG
 )
 values(zones_10m) <- 1:ncell(zones_10m)
+crs(zones_10m) <- CRS_EPSG
+
 zones_mask_10m <- resample(zones_redistribution_renumbered, zones_10m, method = "near")
+crs(zones_mask_10m) <- CRS_EPSG
 zones_10m <- mask(zones_10m, zones_mask_10m)
+crs(zones_10m) <- CRS_EPSG
 
 # Free memory before parallel computation
 gc()
@@ -505,17 +568,27 @@ clusterExport(
   cl,
   varlist = c(
     "upfilling_quantile_end", "upfilling_quantile_start", "upfilling_quantile_step",
-    "results_path", "zones_redistribution"
+    "results_path", "zones_redistribution", "CRS_EPSG"
   )
 )
 
 # Save intermediate rasters used by parallel workers
-writeRaster(VHM_aftertreetop, filename = file.path(results_path, "VHM/deadwood_VHM.tif"), overwrite = TRUE)
-writeRaster(VHM, filename = file.path(results_path, "VHM/beforettop_VHM.tif"), overwrite = TRUE)
-writeRaster(VHM_onlyttops, filename = file.path(results_path, "VHM/VHM_onlyttops.tif"), overwrite = TRUE)
+writeRaster(`crs<-`(VHM_aftertreetop, CRS_EPSG),
+            filename = file.path(results_path, "VHM/deadwood_VHM.tif"),
+            overwrite = TRUE)
+
+writeRaster(`crs<-`(VHM, CRS_EPSG),
+            filename = file.path(results_path, "VHM/beforettop_VHM.tif"),
+            overwrite = TRUE)
+
+writeRaster(`crs<-`(VHM_onlyttops, CRS_EPSG),
+            filename = file.path(results_path, "VHM/VHM_onlyttops.tif"),
+            overwrite = TRUE)
 
 if (!file.exists(file.path(results_path, "zones/zones_redistribution.tif"))) {
-  writeRaster(zones_redistribution_renumbered, file.path(results_path, "zones/zones_redistribution.tif"), overwrite = TRUE)
+  writeRaster(`crs<-`(zones_redistribution_renumbered, CRS_EPSG),
+              file.path(results_path, "zones/zones_redistribution.tif"),
+              overwrite = TRUE)
 }
 
 # Compute SVH metrics across quantiles and redistribution zones in parallel
@@ -526,12 +599,14 @@ results_SVH <- foreach(
   quantile_deadwood_height = seq(upfilling_quantile_start, upfilling_quantile_end, by = upfilling_quantile_step),
   .combine = "rbind",
   .packages = c("terra", "spatialEco"),
-  .export = c("results_path")
+  .export = c("results_path", "CRS_EPSG")
 ) %dopar% {
   
   # Load intermediate rasters in each worker
   deadwood_VHM <- rast(file.path(results_path, "VHM/deadwood_VHM.tif"))
+  crs(deadwood_VHM) <- CRS_EPSG
   zones_redistribution_renumbered <- rast(file.path(results_path, "zones/zones_redistribution.tif"))
+  crs(zones_redistribution_renumbered) <- CRS_EPSG
   
   # Function: Snow accumulation on protruding deadwood elements
   snow_above_deadwood <- function(x) {
@@ -575,6 +650,7 @@ results_SVH <- foreach(
     extent <- zone_extents[[zone_id]]
     zone_buffer <- extend(extent, 1.2)
     VHM_crop <- crop(deadwood_VHM, zone_buffer)
+    crs(VHM_crop) <- CRS_EPSG
     
     # Compute quantile-based deadwood height
     VHM_max_value <- global(
@@ -584,10 +660,12 @@ results_SVH <- foreach(
     
     VHM_max <- VHM_crop
     values(VHM_max) <- VHM_max_value
+    crs(VHM_max) <- CRS_EPSG
     
     # Compute stored volume height (SVH)
     SVH <- VHM_max - VHM_crop
     SVH[SVH < 0] <- 0
+    crs(SVH) <- CRS_EPSG
     
     mean_SVH_value <- global(SVH, fun = "mean", na.rm = TRUE)[[1]]
     
@@ -651,12 +729,17 @@ bell_membership_canopycoverage <- function(x, a = 40, b = 3.5, c = -15) {
 
 # Compute slope membership on the 5 m grid
 dtm_resampled_5m <- resample(DTM, zones_5m, method = "bilinear")
+crs(dtm_resampled_5m) <- CRS_EPSG
 DTM_5m_slope <- terrain(dtm_resampled_5m, v = "slope", unit = "degrees")
+crs(DTM_5m_slope) <- CRS_EPSG
 slope_membership <- bell_membership_slope(DTM_5m_slope, a = 7, b = 4, c = 43)
+crs(slope_membership) <- CRS_EPSG
 
 # Save slope membership, if it does not yet exist
 if (!file.exists(file.path(results_path, "slope_membership/slope_ALS2015_5m_membership.tif"))) {
-  writeRaster(slope_membership, file.path(results_path, "slope_membership/slope_ALS2015_5m_membership.tif"), overwrite = TRUE)
+  writeRaster(`crs<-`(slope_membership, CRS_EPSG),
+              file.path(results_path, "slope_membership/slope_ALS2015_5m_membership.tif"),
+              overwrite = TRUE)
 }
 
 # ==================================================================================================
@@ -665,16 +748,23 @@ if (!file.exists(file.path(results_path, "slope_membership/slope_ALS2015_5m_memb
 
 # Prepare crown-height raster relative to deadwood surface
 VHM_crowns_filled_crop <- crop(VHM_crowns_filled_extended, ext(zones_redistribution_renumbered))
+crs(VHM_crowns_filled_crop) <- CRS_EPSG
 r_template <- rast(VHM_crowns_filled_crop)
+crs(r_template) <- CRS_EPSG
 res(r_template) <- 0.2
 
 VHM_beforettop_extended <- extend(VHM, zones_10m)
+crs(VHM_beforettop_extended) <- CRS_EPSG
 crown_height_above_deadwood <- VHM_crowns_filled_crop - VHM_beforettop_extended
+crs(crown_height_above_deadwood) <- CRS_EPSG
 
 # Classify canopy cover presence above 4 m (twice the expected 30y-snow depth)
 crown_height_binary <- ifel(crown_height_above_deadwood < 4, 0, 1)
+crs(crown_height_binary) <- CRS_EPSG
 crown_height_binary <- extend(crown_height_binary, zones_10m)
+crs(crown_height_binary) <- CRS_EPSG
 zones_10m_02res <- resample(zones_10m, crown_height_binary, method = "near")
+crs(zones_10m_02res) <- CRS_EPSG
 
 # Compute canopy cover fraction per 10 m zone
 # Canopy cover is estimated as the proportion of cells with crown height above a
@@ -689,13 +779,21 @@ raster_canopycoverage <- classify(
   zone_stats,
   others = NA
 )
+crs(raster_canopycoverage) <- CRS_EPSG
 
 membership_canopycoverage <- bell_membership_canopycoverage(raster_canopycoverage)
+crs(membership_canopycoverage) <- CRS_EPSG
 membership_canopycoverage <- resample(membership_canopycoverage, zones_5m, method = "near")
+crs(membership_canopycoverage) <- CRS_EPSG
 
 # Save intermediate canopy outputs
-writeRaster(zones_5m, file.path(results_path, "zones/zones_5m.tif"), overwrite = TRUE)
-writeRaster(membership_canopycoverage, file.path(results_path, "adapted_tree_parameters/canopycoverage_membership.tif"), overwrite = TRUE)
+writeRaster(`crs<-`(zones_5m, CRS_EPSG),
+            file.path(results_path, "zones/zones_5m.tif"),
+            overwrite = TRUE)
+
+writeRaster(`crs<-`(membership_canopycoverage, CRS_EPSG),
+            file.path(results_path, "adapted_tree_parameters/canopycoverage_membership.tif"),
+            overwrite = TRUE)
 
 # Free memory before fuzzy-logic processing
 gc()
@@ -717,27 +815,36 @@ clusterExport(
   cl,
   varlist = c(
     "upfilling_SVH_start", "upfilling_SVH_end", "upfilling_SVH_step",
-    "results_SVH", "bell_membership_roughness_bed_surface", "results_path"
+    "results_SVH", "bell_membership_roughness_bed_surface", "results_path", "CRS_EPSG"
   )
 )
 
 results_fuzzy_approach <- foreach(
   SVH_height = seq(upfilling_SVH_start, upfilling_SVH_end, by = upfilling_SVH_step),
-  .packages = c("terra", "foreach", "doParallel", "spatialEco", "dplyr")
+  .packages = c("terra", "foreach", "doParallel", "spatialEco", "dplyr"),
+  .export = c("CRS_EPSG")
 ) %dopar% {
   
   # Load required rasters in each worker
   VHM_withttop <- rast(file.path(results_path, "VHM/deadwood_VHM.tif"))
+  crs(VHM_withttop) <- CRS_EPSG
   VHM_onlyttop <- rast(file.path(results_path, "VHM/VHM_onlyttops.tif"))
+  crs(VHM_onlyttop) <- CRS_EPSG
   VHM_beforettop <- rast(file.path(results_path, "VHM/beforettop_VHM.tif"))
+  crs(VHM_beforettop) <- CRS_EPSG
   zones_redistribution_renumbered <- rast(file.path(results_path, "zones/zones_redistribution.tif"))
+  crs(zones_redistribution_renumbered) <- CRS_EPSG
   slope_membership <- rast(file.path(results_path, "slope_membership/slope_ALS2015_5m_membership.tif"))
+  crs(slope_membership) <- CRS_EPSG
   zones_5m <- rast(file.path(results_path, "zones/zones_5m.tif"))
+  crs(zones_5m) <- CRS_EPSG
   membership_canopycoverage <- rast(file.path(results_path, "adapted_tree_parameters/canopycoverage_membership.tif"))
+  crs(membership_canopycoverage) <- CRS_EPSG
   
   # Define target raster for roughness computation
   target_raster <- zones_redistribution_renumbered
   res(target_raster) <- c(0.4, 0.4)
+  crs(target_raster) <- CRS_EPSG
   
   # Select the closest quantile-based deadwood height per zone
   closest_quantile_per_zone <- results_SVH %>%
@@ -776,7 +883,9 @@ results_fuzzy_approach <- foreach(
     zone_buffer <- extend(extent, 1.6)
     
     VHM_crop <- crop(VHM_withttop, zone_buffer)
+    crs(VHM_crop) <- CRS_EPSG
     VHM_max <- VHM_crop
+    crs(VHM_max) <- CRS_EPSG
     
     # Assign quantile-based maximum deadwood height for the zone
     VHM_max_value <- closest_quantile_per_zone %>%
@@ -784,49 +893,66 @@ results_fuzzy_approach <- foreach(
       pull(Quantile_height)
     
     values(VHM_max) <- VHM_max_value
+    crs(VHM_max) <- CRS_EPSG
     
     # Prepare raster variants for roughness analysis
     VHM_onlyttop_crop <- crop(VHM_onlyttop, zone_buffer)
+    crs(VHM_onlyttop_crop) <- CRS_EPSG
     VHM_beforettop_crop <- crop(VHM_beforettop, zone_buffer)
+    crs(VHM_beforettop_crop) <- CRS_EPSG
     VHM_withttop_crop <- crop(VHM_withttop, zone_buffer)
-    
+    crs(VHM_withttop_crop) <- CRS_EPSG
     
     # Combine the local VHM with the zone-specific snow cover
     # This simulates a snow surface that fills depressions up to the
     # simulated snow height within each redistribution zone.
     VHM_onlyttop_filled <- app(c(VHM_max, VHM_onlyttop_crop), fun = max, na.rm = TRUE)
+    crs(VHM_onlyttop_filled) <- CRS_EPSG
     VHM_filled_beforettop <- app(c(VHM_max, VHM_beforettop_crop), fun = max, na.rm = TRUE)
+    crs(VHM_filled_beforettop) <- CRS_EPSG
     VHM_filled_withttop <- app(c(VHM_max, VHM_withttop_crop), fun = max, na.rm = TRUE)
-    
+    crs(VHM_filled_withttop) <- CRS_EPSG
     
     # Calculate missing deadwood or stem height
     # roughness-relevant residual structure.
     VHM_onlyttop_filled <- VHM_onlyttop_filled - VHM_max
+    crs(VHM_onlyttop_filled) <- CRS_EPSG
     VHM_filled_beforettop <- VHM_filled_beforettop - VHM_max
+    crs(VHM_filled_beforettop) <- CRS_EPSG
     VHM_filled_withttop <- VHM_filled_withttop - VHM_max
+    crs(VHM_filled_withttop) <- CRS_EPSG
     
     # Resample for roughness calculation
     VHM_onlyttop_filled_resampled <- resample(VHM_onlyttop_filled, target_raster, method = "bilinear")
+    crs(VHM_onlyttop_filled_resampled) <- CRS_EPSG
     VHM_filled_resampled_beforettop <- resample(VHM_filled_beforettop, target_raster, method = "bilinear")
+    crs(VHM_filled_resampled_beforettop) <- CRS_EPSG
     
     VHM_onlyttops_filled_resampled <- crop(VHM_onlyttop_filled_resampled, zone_buffer)
+    crs(VHM_onlyttops_filled_resampled) <- CRS_EPSG
     VHM_filled_resampled_beforettop <- crop(VHM_filled_resampled_beforettop, zone_buffer)
+    crs(VHM_filled_resampled_beforettop) <- CRS_EPSG
     
     # Compute roughness for winter terrain without standing trees and only for standing trees (different window size) 
-	# as spatial roughness effect is smaller of standing trees
+    # as spatial roughness effect is smaller of standing trees
     roughness_onlyttop <- vrm(VHM_onlyttops_filled_resampled, 3)
+    crs(roughness_onlyttop) <- CRS_EPSG
     roughness_beforettop <- vrm(VHM_filled_resampled_beforettop, 7)
+    crs(roughness_beforettop) <- CRS_EPSG
     
-    #combine roughness values using higher value
+    # combine roughness values using higher value
     roughness_combined <- app(
       c(roughness_onlyttop, roughness_beforettop),
       fun = max,
       na.rm = TRUE
     )
+    crs(roughness_combined) <- CRS_EPSG
     
     # Restrict outputs to the original zone extent
     roughness_clipped <- crop(roughness_combined, extent)
+    crs(roughness_clipped) <- CRS_EPSG
     VHM_crop_filled <- crop(VHM_filled_withttop, extent)
+    crs(VHM_crop_filled) <- CRS_EPSG
     
     roughness_list[[zone_id]] <- roughness_clipped
     VHM_filled_list[[zone_id]] <- VHM_crop_filled
@@ -835,10 +961,14 @@ results_fuzzy_approach <- foreach(
   # Merge zone-wise outputs
   roughness_list <- roughness_list[!sapply(roughness_list, is.null)]
   roughness_mosaic <- do.call(mosaic, c(unname(roughness_list), list(fun = "first")))
+  crs(roughness_mosaic) <- CRS_EPSG
   roughness_mosaic <- extend(roughness_mosaic, ext(zones_5m))
+  crs(roughness_mosaic) <- CRS_EPSG
   roughness_mosaic_membership <- bell_membership_roughness_bed_surface(roughness_mosaic)
+  crs(roughness_mosaic_membership) <- CRS_EPSG
   
   zones_05m <- resample(zones_5m, roughness_mosaic, method = "near")
+  crs(zones_05m) <- CRS_EPSG
   
   # Aggregate roughness membership by zone using different quantiles (5, 10, 20)
   zone_q5 <- zonal(
@@ -848,6 +978,7 @@ results_fuzzy_approach <- foreach(
   )
   roughness_aggregated_q5 <- zones_5m
   values(roughness_aggregated_q5) <- zone_q5[, 2][match(values(zones_5m), zone_q5[, 1])]
+  crs(roughness_aggregated_q5) <- CRS_EPSG
   
   zone_q10 <- zonal(
     roughness_mosaic_membership,
@@ -856,6 +987,7 @@ results_fuzzy_approach <- foreach(
   )
   roughness_aggregated_q10 <- zones_5m
   values(roughness_aggregated_q10) <- zone_q10[, 2][match(values(zones_5m), zone_q10[, 1])]
+  crs(roughness_aggregated_q10) <- CRS_EPSG
   
   zone_q20 <- zonal(
     roughness_mosaic_membership,
@@ -864,10 +996,12 @@ results_fuzzy_approach <- foreach(
   )
   roughness_aggregated_q20 <- zones_5m
   values(roughness_aggregated_q20) <- zone_q20[, 2][match(values(zones_5m), zone_q20[, 1])]
+  crs(roughness_aggregated_q20) <- CRS_EPSG
   
   # Merge filled VHM outputs
   VHM_filled_list <- VHM_filled_list[!sapply(VHM_filled_list, is.null)]
   VHM_filled_mosaic <- do.call(mosaic, c(unname(VHM_filled_list), list(fun = "first")))
+  crs(VHM_filled_mosaic) <- CRS_EPSG
   
   # Fuzzy aggregation of roughness, slope, and canopy membership
   # The aggregation combines limiting effects and average conditions, yielding a
@@ -885,10 +1019,14 @@ results_fuzzy_approach <- foreach(
     })
     mu_aggregated
   }
+  
   # Calculate PRA for different aggregation percentiles (5, 10, 20)
   fuzzy_logic_result_q5roughness <- mu_PRA(roughness_aggregated_q5, slope_membership, membership_canopycoverage)
+  crs(fuzzy_logic_result_q5roughness) <- CRS_EPSG
   fuzzy_logic_result_q10roughness <- mu_PRA(roughness_aggregated_q10, slope_membership, membership_canopycoverage)
+  crs(fuzzy_logic_result_q10roughness) <- CRS_EPSG
   fuzzy_logic_result_q20roughness <- mu_PRA(roughness_aggregated_q20, slope_membership, membership_canopycoverage)
+  crs(fuzzy_logic_result_q20roughness) <- CRS_EPSG
   
   # Define output filenames
   output_filename_roughness <- file.path(results_path, "roughness", paste0("roughness_SVH_", SVH_height, ".tif"))
@@ -902,15 +1040,41 @@ results_fuzzy_approach <- foreach(
   output_filename_fuzzy_logic_q20 <- file.path(results_path, "fuzzy_logic", paste0("fuzzy_logic_result_q20_SVH_", SVH_height, ".tif"))
   
   # Save outputs for the current snow depth
-  writeRaster(roughness_mosaic_membership, output_filename_roughness_membership, overwrite = TRUE)
-  writeRaster(roughness_mosaic, output_filename_roughness, overwrite = TRUE)
-  writeRaster(roughness_aggregated_q20, output_filename_roughness_aggregated_q20, overwrite = TRUE)
-  writeRaster(roughness_aggregated_q10, output_filename_roughness_aggregated_q10, overwrite = TRUE)
-  writeRaster(roughness_aggregated_q5, output_filename_roughness_aggregated_q5, overwrite = TRUE)
-  writeRaster(VHM_filled_mosaic, output_filename_VHM_filled, overwrite = TRUE)
-  writeRaster(fuzzy_logic_result_q5roughness, output_filename_fuzzy_logic_q5, overwrite = TRUE)
-  writeRaster(fuzzy_logic_result_q10roughness, output_filename_fuzzy_logic_q10, overwrite = TRUE)
-  writeRaster(fuzzy_logic_result_q20roughness, output_filename_fuzzy_logic_q20, overwrite = TRUE)
+  writeRaster(`crs<-`(roughness_mosaic_membership, CRS_EPSG),
+              output_filename_roughness_membership,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(roughness_mosaic, CRS_EPSG),
+              output_filename_roughness,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(roughness_aggregated_q20, CRS_EPSG),
+              output_filename_roughness_aggregated_q20,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(roughness_aggregated_q10, CRS_EPSG),
+              output_filename_roughness_aggregated_q10,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(roughness_aggregated_q5, CRS_EPSG),
+              output_filename_roughness_aggregated_q5,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(VHM_filled_mosaic, CRS_EPSG),
+              output_filename_VHM_filled,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(fuzzy_logic_result_q5roughness, CRS_EPSG),
+              output_filename_fuzzy_logic_q5,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(fuzzy_logic_result_q10roughness, CRS_EPSG),
+              output_filename_fuzzy_logic_q10,
+              overwrite = TRUE)
+  
+  writeRaster(`crs<-`(fuzzy_logic_result_q20roughness, CRS_EPSG),
+              output_filename_fuzzy_logic_q20,
+              overwrite = TRUE)
   
   output_filename_roughness
 }
@@ -925,14 +1089,28 @@ gc()
 # Please adapt file names, if a clearer distinction between parameter settings is required.
 # These final products include the deadwood-related DSM, crown raster
 # outputs, and additional structural rasters, needed for interpretation.
-writeRaster(DSM_no_trees, file.path(results_path, "VHM", "DSM_notrees.tif"), overwrite = TRUE)
-writeRaster(crowns, file.path(results_path, "adapted_tree_parameters", "crowns.tif"), overwrite = TRUE)
+writeRaster(`crs<-`(DSM_no_trees, CRS_EPSG),
+            file.path(results_path, "VHM", "DSM_notrees.tif"),
+            overwrite = TRUE)
+
+writeRaster(`crs<-`(crowns, CRS_EPSG),
+            file.path(results_path, "adapted_tree_parameters", "crowns.tif"),
+            overwrite = TRUE)
 
 # Save filtered tree tops as shapefile
 ttops <- st_as_sf(ttops_filtered)
+st_crs(ttops) <- CRS_EPSG
 st_write(ttops, file.path(results_path, "adapted_tree_parameters", "tree_tops.shp"), delete_layer = TRUE)
 
 # Save additional VHM products
-writeRaster(VHM, file.path(results_path, "VHM", "VHM_notrees.tif"), overwrite = TRUE)
-writeRaster(VHM_crowns_filled, file.path(results_path, "VHM", "VHM_crowns_filled.tif"), overwrite = TRUE)
-writeRaster(crown_height_above_deadwood, file.path(results_path, "VHM", "crown_height_above_deadwood.tif"), overwrite = TRUE)
+writeRaster(`crs<-`(VHM, CRS_EPSG),
+            file.path(results_path, "VHM", "VHM_notrees.tif"),
+            overwrite = TRUE)
+
+writeRaster(`crs<-`(VHM_crowns_filled, CRS_EPSG),
+            file.path(results_path, "VHM", "VHM_crowns_filled.tif"),
+            overwrite = TRUE)
+
+writeRaster(`crs<-`(crown_height_above_deadwood, CRS_EPSG),
+            file.path(results_path, "VHM", "crown_height_above_deadwood.tif"),
+            overwrite = TRUE)
