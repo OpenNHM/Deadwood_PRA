@@ -10,8 +10,8 @@
 # release. The workflow combines terrain information, deadwood
 # structure, and canopy coverage to derive spatially explicit fuzzy membership maps.
 #
-# Authors: Leon Buehrle, Tommaso Baggio
-# Contacts: leon.buehrle@t-online.de; tbaggio93@gmail.com
+# Authors: Leon Buehrle, Michaela Teich
+# Contacts: leon.buehrle@t-online.de; michaela.teich@bfw.gv.at
 # Year: 2026
 #
 # Notes:
