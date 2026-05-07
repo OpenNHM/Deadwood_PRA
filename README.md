@@ -6,6 +6,7 @@ The workflow integrates terrain information, deadwood structure, and canopy cove
 To successfully run the provided R code, the folder structure and input paths must be adjusted accordingly.
 
 Authors: Leon Buehrle, Michaela Teich
+
 Year: 2026
 
 Contact:
