@@ -1,11 +1,15 @@
 # Title: Deadwood_PRA – Decision Support Tool for Assessing the Protective Effect of Lying Deadwood Against Snow Avalanche Release
 #
 # Description:
-# This script computes avalanche release membership and assesses the protective
-# effect of lying deadwood-dominated forest areas against snow avalanche release
-# using UAV-derived data. It is designed for disturbed mountain forests, where
-# lying deadwood strongly influences surface roughness and therefore the
-# likelihood of avalanche release.
+# Deadwood_PRA computes fuzzy snow avalanche release membership and assesses the protective effect of lying deadwood-dominated 
+#forest areas using UAV-derived data. The tool is specifically designed for disturbed mountain forests, where lying deadwood 
+#substantially influences surface roughness and thereby the likelihood of avalanche release.
+
+The automated workflow integrates terrain information, deadwood structure, and canopy coverage of standing trees to generate 
+#spatially explicit fuzzy membership maps. The analysis requires only a dense point cloud, ideally derived from UAV photogrammetry 
+#or ULS data, together with a reference DTM.
+
+#To successfully run the provided R code, the folder structure and input paths must be adjusted accordingly before execution.
 #
 # The workflow combines terrain information, deadwood structure, and canopy
 # coverage to derive spatially explicit fuzzy membership maps.
@@ -14,9 +18,7 @@
 #   - a dense point cloud (ideally derived from UAV photogrammetry or ULS)
 #   - a reference DTM
 #
-# To run the script, the folder structure and input paths must be adjusted
-# accordingly.
-#
+
 # Authors: Leon Buehrle, Michaela Teich
 # Contacts: leon.buehrle@t-online.de; michaela.teich@bfw.gv.at
 # Year: 2026
@@ -25,7 +27,6 @@
 # - Developed for deadwood structure analysis, based on high-resolution UAV SfM/MVS and ULS pointclouds
 # - Code was sucessfully tested across five study sites, including windthrow and snagfall dominated areas
 # - Code was tested using different pointclouds derived from both low-cost UAV-photogrammetry and advanced ULS systems
-# - The workflow integrates terrain, deadwood structure, canopy cover, and surface roughness.
 #
 # Disclaimer:
 # THE SCRIPT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
