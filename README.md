@@ -16,13 +16,13 @@ Michaela Teich – michaela.teich@bfw.gv.at
 
 For testing the code, we provide the following datasets:
 
-Test raw data study site Kals (point clouds): [Zenodo Dataset Kals]((https://doi.org/10.5281/zenodo.19485391))
+Test raw data study site Kals (point clouds): [Zenodo Dataset Kals]((https://doi.org/10.5281/zenodo.19485391)
+
 Test raw data study sites Franza/Col di Lana (point clouds): [Zenodo Dataset Franza/Col di Lana](https://doi.org/10.5281/zenodo.19681140)
+
 Test raw data study sites Caore/Molina (point clouds): [Zenodo Dataset Caore/Molina](https://doi.org/10.5281/zenodo.20185048)
+
 Results (calculated with default settings): [Zenodo Results] (https://doi.org/10.5281/zenodo.19734443)
-
-- Test raw data (point clouds): [Zenodo Dataset](https://doi.org/10.5281/zenodo.19485391)  
-
 
 Due to data restrictions we cannot provide the required reference DTM.  
 Users are referred to the official regional data provider.
