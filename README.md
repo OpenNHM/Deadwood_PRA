@@ -22,7 +22,7 @@ Test raw data study sites Franza/Col di Lana (point clouds): [Zenodo Dataset Fra
 
 Test raw data study sites Caore/Molina (point clouds): [Zenodo Dataset Caore/Molina](https://doi.org/10.5281/zenodo.20185048)
 
-Results (calculated with default settings): [Zenodo Results] (https://doi.org/10.5281/zenodo.19734443)
+Results (calculated with default settings): [Zenodo Results](https://doi.org/10.5281/zenodo.19734443)
 
 Due to data restrictions we cannot provide the required reference DTM.  
 Users are referred to the official regional data provider.
