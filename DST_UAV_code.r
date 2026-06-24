@@ -656,7 +656,7 @@ results_SVH <- foreach(
   
   for (zone_id in names(zone_extents)) {
     extent <- zone_extents[[zone_id]]
-    zone_buffer <- extend(extent, 1.2)
+    zone_buffer <- extend(extent, 1.6)
     VHM_crop <- crop(deadwood_VHM, zone_buffer)
     crs(VHM_crop) <- CRS_EPSG
     
